@@ -124,35 +124,68 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+// Orden de prioridad en los empates de decision: up, left, down, right.
+const DIR_ORDER = [ 'up', 'left', 'down', 'right' ];
+
+// Celda objetivo de cada personalidad (distancias Manhattan).
+//   hunter:   Pacman.
+//   ambusher: 4 celdas delante de Pacman segun su dir (sin el bug clasico).
+//   flanker:  doble del vector Blinky->(2 delante de Pacman), flanquea desde
+//             el lado de Blinky. Usa la celda real de Blinky aunque este en pen.
+//   shy:      persigue a Pacman si Manhattan > 8; si no, huye a su esquina (1,29).
+function ghostTarget( game, g ) {
+  const p = game.pacman;
+  const px = Math.round( p.x );
+  const py = Math.round( p.y );
+  const d = DIRS[ p.dir ];
+
+  switch ( g.kind ) {
+    case 'ambusher':
+      return { x: px + 4 * d.x, y: py + 4 * d.y };
+    case 'flanker': {
+      const blinky = game.ghosts.find( ( o ) => o.kind === 'hunter' );
+      const aheadX = px + 2 * d.x;
+      const aheadY = py + 2 * d.y;
+      return {
+        x: Math.round( blinky.x ) + 2 * ( aheadX - Math.round( blinky.x ) ),
+        y: Math.round( blinky.y ) + 2 * ( aheadY - Math.round( blinky.y ) ),
+      };
+    }
+    case 'shy':
+      if ( Math.abs( g.x - px ) + Math.abs( g.y - py ) > 8 ) {
+        return { x: px, y: py };
+      }
+      return { x: 1, y: 29 };
+    default: // 'hunter'
+      return { x: px, y: py };
+  }
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
-  const p = game.pacman;
 
-  const options = Object.keys( DIRS ).filter(
+  // Opciones en orden de prioridad (up, left, down, right), sin media vuelta.
+  const options = DIR_ORDER.filter(
     ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, g )
   );
   // Sin salida (callejon): permitir el giro de 180.
-  const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
+  const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
 
-  if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
+  const target = ghostTarget( game, g );
+  let best = choices[ 0 ];
+  let bestDist = Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - target.x ) + Math.abs( ny - target.y );
+    // '<' estricto mantiene la primera opcion en empate: orden up,left,down,right.
+    if ( dist < bestDist ) {
+      bestDist = dist;
+      best = dir;
     }
-    g.dir = best;
-  } else {
-    g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
   }
+  g.dir = best;
 }
 
 // Script de salida de la pen: desde su celda de inicio, subir a la fila 13,
