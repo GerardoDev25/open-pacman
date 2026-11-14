@@ -321,15 +321,41 @@ function update( game ) {
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
-    if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
-      }
-      resetPositions( game );
-      break;
+    if ( !collides( game.pacman, g ) ) continue;
+    if ( g.mode === 'eyes' ) continue; // los ojos no colisionan ni se comen
+
+    if ( g.frightened ) {
+      // Comer fantasma asustado: cadena 200/400/800/1600 (tope), popup en su
+      // celda y pasa a modo 'eyes' para regresar a la pen.
+      const pts = GHOST_POINTS[ game.ghostChain ];
+      game.score += pts;
+      game.ghostChain = Math.min( game.ghostChain + 1, 3 );
+      game.popup = {
+        x: Math.round( g.x ),
+        y: Math.round( g.y ),
+        text: String( pts ),
+        ttl: 30,
+      };
+      g.mode = 'eyes';
+      g.exitPath = null;
+      g.frightened = false;
+      continue;
     }
+
+    // Fantasma normal: perder vida como hasta ahora.
+    game.lives--;
+    if ( game.lives <= 0 ) {
+      game.state = 'lost';
+      return;
+    }
+    resetPositions( game );
+    break;
+  }
+
+  // Popup del puntaje: vive ~30 frames desde que se creo.
+  if ( game.popup ) {
+    game.popup.ttl--;
+    if ( game.popup.ttl <= 0 ) game.popup = null;
   }
 
   if ( game.dotsRemaining <= 0 ) game.state = 'won';

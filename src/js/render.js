@@ -160,6 +160,17 @@ function drawHUD( ctx, game, W ) {
   ctx.fillText( 'VIDAS ' + game.lives, W * TILE - 8, 4 );
 }
 
+// Popup del puntaje del ultimo fantasma comido: numero blanco en su celda.
+function drawPopup( ctx, popup ) {
+  if ( !popup || popup.ttl <= 0 ) return;
+  const { cx, cy } = cellCenter( popup.x, popup.y );
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText( popup.text, cx, cy );
+}
+
 // Orden del array = orden de dibujo de GHOST_STARTS: Blinky, Pinky, Inky, Clyde.
 const GHOST_COLORS = [ '#ff0000', '#ffb8ff', '#00ffff', '#ffb852' ];
 
@@ -177,6 +188,7 @@ function draw( ctx, game, frame ) {
   drawPowerPellets( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
   game.ghosts.forEach( ( g, i ) => drawGhost( ctx, g, GHOST_COLORS[ i ] || '#ff0000' ) );
+  drawPopup( ctx, game.popup );
   drawHUD( ctx, game, W );
 }
 
