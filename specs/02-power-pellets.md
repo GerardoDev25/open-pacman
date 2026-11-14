@@ -114,6 +114,7 @@ Cada paso deja el juego corriendo y verificable en el navegador (`python3 -m htt
 - **No:** huida aleatoria del arcade. Descartada por no verificable; la huida por Manhattan da el mismo efecto de juego.
 - **No:** puntos extra por los 4 fantasmas de un pellet, fruta, scatter/chase o audio. Cada uno, si aterriza, va en su propio spec.
 - **Decisión técnica:** el cambio de velocidad (normal ↔ asustada) solo se aplica cuando el fantasma está alineado a un centro de celda. Si se cambiara a mitad de tramo, la posición dejaría de ser suma de `1/N` y el fantasma podría dejar de re-alinearse (rompiendo `decideGhost`), mismo motivo que en SPEC 01 obligó a velocidades `1/N`.
+- **Decisión técnica (Paso 6, aprobada por el usuario al implementar):** los ojos navegan hacia (13,11) con **BFS** (camino más corto sobre el grid, puerta transitable, desempate up/left/down/right) en lugar del greedy de `decideGhost`: el greedy con la regla de no media vuelta se queda en ciclos estables alrededor de bloques (verificado: nunca converge desde la zona inferior izquierda). El descenso (13,11)→(13,13) y la salida revivida siguen usando el script `moveExit`/`penExitPath`.
 
 ---
 

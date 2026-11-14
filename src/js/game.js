@@ -73,13 +73,17 @@ function aligned( v ) {
 // Una celda es muro para el actor dado?
 //   pacman: bloqueado por pared (1) y puerta (3)
 //   ghost:  bloqueado por pared (1); la puerta (3) tambien, salvo que este
-//           en modo 'exit' (es el unico que puede atravesarla).
+//           en modo 'exit' (script de salida/entrada) o 'eyes' (regreso a
+//           la pen). El bloque general de navegacion nunca la cruza porque
+//           su objetivo es (13,11), arriba de la puerta.
 function isWall( grid, x, y, actor ) {
   if ( y < 0 || y >= grid.length ) return true;
   if ( x < 0 || x >= grid[ 0 ].length ) return true;
   const v = grid[ y ][ x ];
   if ( v === 1 ) return true;
-  if ( v === 3 ) return actor === 'pacman' || actor.mode !== 'exit';
+  if ( v === 3 ) {
+    return actor === 'pacman' || ( actor.mode !== 'exit' && actor.mode !== 'eyes' );
+  }
   return false;
 }
 
@@ -242,12 +246,64 @@ function moveExit( g ) {
       g.y = w.y;
       g.exitPath.shift();
       if ( !g.exitPath.length ) {
-        // Salio de la pen: pasa a perseguir.
-        g.mode = 'chase';
-        g.dir = 'left';
+        if ( g.eyesReturn ) {
+          // Fin del descenso de los ojos (13,13): reviven y salen de
+          // inmediato por la puerta, ya no asustados.
+          g.eyesReturn = false;
+          g.frightened = false;
+          g.exitPath = penExitPath( g );
+        } else {
+          // Salio de la pen: pasa a perseguir.
+          g.mode = 'chase';
+          g.dir = 'left';
+        }
       }
     }
   }
+}
+
+// Siguiente direccion del camino mas corto (BFS) desde (x,y) hasta la puerta
+// de la pen (13,11). La puerta (3) es transitable; fuera del tablero no.
+// Devuelve null solo si (x,y) ya es la puerta o no hay camino.
+function eyesNextStep( grid, x, y ) {
+  const W = grid[ 0 ].length;
+  const H = grid.length;
+  const start = y * W + x;
+  const goal = 11 * W + 13;
+  if ( start === goal ) return null;
+
+  const prev = new Map( [ [ start, -1 ] ] );
+  const queue = [ start ];
+  while ( queue.length ) {
+    const k = queue.shift();
+    if ( k === goal ) break;
+    const cx = k % W;
+    const cy = Math.floor( k / W );
+    // Orden up, left, down, right: desempate determinista del camino.
+    for ( const dir of DIR_ORDER ) {
+      const d = DIRS[ dir ];
+      const nx = cx + d.x;
+      const ny = cy + d.y;
+      if ( nx < 0 || nx >= W || ny < 0 || ny >= H ) continue;
+      if ( grid[ ny ][ nx ] === 1 ) continue;
+      const nk = ny * W + nx;
+      if ( prev.has( nk ) ) continue;
+      prev.set( nk, k );
+      queue.push( nk );
+    }
+  }
+  if ( !prev.has( goal ) ) return null;
+
+  // Reconstruir el camino desde la puerta hacia atras hasta dar con la
+  // celda cuyo predecesor es (x,y): esa es la del primer paso.
+  let k = goal;
+  while ( prev.get( k ) !== start ) k = prev.get( k );
+  const nx = k % W;
+  const ny = Math.floor( k / W );
+  if ( ny === y - 1 ) return 'up';
+  if ( ny === y + 1 ) return 'down';
+  if ( nx === x - 1 ) return 'left';
+  return 'right';
 }
 
 function moveGhost( game, g ) {
@@ -266,7 +322,23 @@ function moveGhost( game, g ) {
     // Cambio de velocidad solo al re-alinear (Decisiones SPEC 02): hacerlo a
     // mitad de tramo romperia la suma exacta de 1/N y el alineado a centros.
     g.speed = g.frightened ? FRIGHT_SPEED : GHOST_SPEEDS[ g.kind ];
-    decideGhost( game, g );
+
+    if ( g.mode === 'eyes' ) {
+      // Ojos: al llegar a la puerta (13,11) descienden en script hasta
+      // (13,13), donde reviven. En el resto de celdas siguen el camino mas
+      // corto (BFS); decideGhost greedy se queda en ciclos alrededor de
+      // bloques y no converge (ver Decisiones de SPEC 02).
+      if ( g.x === 13 && g.y === 11 ) {
+        g.mode = 'exit';     // reutiliza el script moveExit para el descenso
+        g.eyesReturn = true; // al completar el descenso, revive en la pen
+        g.exitPath = [ { x: 13, y: 13 } ];
+        return;
+      }
+      g.dir = eyesNextStep( grid, g.x, g.y ) || g.dir;
+    } else {
+      decideGhost( game, g );
+    }
+
     if ( !canMove( grid, g.x, g.y, g.dir, g ) ) return;
   }
 
@@ -288,6 +360,7 @@ function resetPositions( game ) {
     g.dir = 'up';
     g.mode = 'pen';
     g.exitPath = null;
+    g.eyesReturn = false;
     // Si su umbral de salida ya fue alcanzado, el chequeo de liberacion en
     // update() los re-emite de inmediato en el proximo frame.
   } );
