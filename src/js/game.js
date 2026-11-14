@@ -19,6 +19,8 @@ const GHOST_SPEEDS = {
   flanker: 1 / 10,  // Inky
   shy: 1 / 10,      // Clyde
 };
+// Dots comidos que necesita cada fantasma para salir de la pen.
+const GHOST_RELEASE_AT = { ambusher: 0, flanker: 30, shy: 60, hunter: 90 };
 
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
@@ -35,6 +37,7 @@ function createGame() {
     score: 0,
     lives: 3,
     dotsRemaining: dots,
+    dotsEaten: 0,
     grid,
     pacman: {
       x: PACMAN_START.x,
@@ -49,6 +52,8 @@ function createGame() {
       dir: 'up',
       speed: GHOST_SPEEDS[ g.kind ],
       kind: g.kind,
+      mode: 'pen', // 'pen' (esperando) | 'exit' (hacia la puerta) | 'chase'
+      releaseAt: GHOST_RELEASE_AT[ g.kind ],
     } ) ),
   };
 }
@@ -59,13 +64,14 @@ function aligned( v ) {
 
 // Una celda es muro para el actor dado?
 //   pacman: bloqueado por pared (1) y puerta (3)
-//   ghost:  bloqueado solo por pared (1)
+//   ghost:  bloqueado por pared (1); la puerta (3) tambien, salvo que este
+//           en modo 'exit' (es el unico que puede atravesarla).
 function isWall( grid, x, y, actor ) {
   if ( y < 0 || y >= grid.length ) return true;
   if ( x < 0 || x >= grid[ 0 ].length ) return true;
   const v = grid[ y ][ x ];
   if ( v === 1 ) return true;
-  if ( v === 3 && actor === 'pacman' ) return true;
+  if ( v === 3 ) return actor === 'pacman' || actor.mode !== 'exit';
   return false;
 }
 
@@ -106,6 +112,7 @@ function movePacman( game ) {
       grid[ p.y ][ p.x ] = 0;
       game.score += 10;
       game.dotsRemaining--;
+      game.dotsEaten++;
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -122,7 +129,7 @@ function decideGhost( game, g ) {
   const p = game.pacman;
 
   const options = Object.keys( DIRS ).filter(
-    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, g )
   );
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
@@ -148,7 +155,52 @@ function decideGhost( game, g ) {
   }
 }
 
+// Script de salida de la pen: desde su celda de inicio, subir a la fila 13,
+// centrarse bajo la puerta (13,13) y subir por la puerta hasta (13,11).
+function penExitPath( g ) {
+  const path = [];
+  if ( Math.round( g.y ) !== 13 ) path.push( { x: g.x, y: 13 } );
+  if ( Math.round( g.x ) !== 13 ) path.push( { x: 13, y: 13 } );
+  path.push( { x: 13, y: 11 } );
+  return path;
+}
+
+// Avance en script hacia el waypoint actual (un eje por vez). Los waypoints
+// son celdas enteras y la velocidad es 1/N, asi que el fantasma se re-alinea
+// exactamente al llegar (con snap por error de punto flotante).
+function moveExit( g ) {
+  const w = g.exitPath[ 0 ];
+  const EPS = 1e-3;
+
+  if ( Math.abs( g.x - w.x ) > EPS ) {
+    const step = Math.min( g.speed, Math.abs( g.x - w.x ) );
+    g.dir = w.x > g.x ? 'right' : 'left';
+    g.x += ( w.x > g.x ? 1 : -1 ) * step;
+  } else {
+    g.x = w.x;
+    if ( Math.abs( g.y - w.y ) > EPS ) {
+      const step = Math.min( g.speed, Math.abs( g.y - w.y ) );
+      g.dir = w.y > g.y ? 'down' : 'up';
+      g.y += ( w.y > g.y ? 1 : -1 ) * step;
+    } else {
+      g.y = w.y;
+      g.exitPath.shift();
+      if ( !g.exitPath.length ) {
+        // Salio de la pen: pasa a perseguir.
+        g.mode = 'chase';
+        g.dir = 'left';
+      }
+    }
+  }
+}
+
 function moveGhost( game, g ) {
+  if ( g.mode === 'pen' ) return; // esperando su turno de salida
+  if ( g.mode === 'exit' ) {
+    moveExit( g );
+    return;
+  }
+
   const grid = game.grid;
   const width = grid[ 0 ].length;
 
@@ -156,7 +208,7 @@ function moveGhost( game, g ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
     decideGhost( game, g );
-    if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
+    if ( !canMove( grid, g.x, g.y, g.dir, g ) ) return;
   }
 
   const d = DIRS[ g.dir ];
@@ -184,6 +236,16 @@ function collides( a, b ) {
 
 function update( game ) {
   movePacman( game );
+
+  // Liberacion por dots comidos: un fantasma en 'pen' sale al alcanzar
+  // su umbral (Pinky 0, Inky 30, Clyde 60, Blinky 90).
+  for ( const g of game.ghosts ) {
+    if ( g.mode === 'pen' && game.dotsEaten >= g.releaseAt ) {
+      g.mode = 'exit';
+      g.exitPath = penExitPath( g );
+    }
+  }
+
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
