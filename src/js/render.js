@@ -5,6 +5,7 @@ const TILE = 20;
 const WALL_COLOR = '#2121ff';
 const DOOR_COLOR = '#ffb8ff';
 const DOT_COLOR = '#ffb897';
+const PELLET_COLOR = '#ffb897';
 
 function cellCenter( x, y ) {
   return { cx: x * TILE + TILE / 2, cy: y * TILE + TILE / 2 };
@@ -79,6 +80,21 @@ function drawDots( ctx, grid ) {
   }
 }
 
+// Power pellets (tile 4): discos grandes que parpadean visibles/invisibles cada 10 frames.
+function drawPowerPellets( ctx, grid, frame ) {
+  if ( Math.floor( frame / 10 ) % 2 !== 0 ) return; // mitad invisible del ciclo
+  ctx.fillStyle = PELLET_COLOR;
+  for ( let y = 0; y < grid.length; y++ ) {
+    for ( let x = 0; x < grid[ 0 ].length; x++ ) {
+      if ( grid[ y ][ x ] !== 4 ) continue;
+      const { cx, cy } = cellCenter( x, y );
+      ctx.beginPath();
+      ctx.arc( cx, cy, 7, 0, Math.PI * 2 );
+      ctx.fill();
+    }
+  }
+}
+
 function drawPacman( ctx, p, frame ) {
   const { cx, cy } = cellCenter( p.x, p.y );
   let rot = 0;
@@ -98,30 +114,15 @@ function drawPacman( ctx, p, frame ) {
   ctx.fill();
 }
 
-function drawGhost( ctx, g, color ) {
-  const { cx, cy } = cellCenter( g.x, g.y );
-  const r = TILE / 2 - 1;
-  const top = cy - r;
-  const bottom = cy + r;
-  const left = cx - r;
-  const right = cx + r;
+const FRIGHT_COLOR = '#2121de';
+const FRIGHT_FLASH_COLOR = '#ffffff';
 
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc( cx, cy - 1, r, Math.PI, 0, false ); // cabeza
-  ctx.lineTo( right, bottom );
-  // falda ondulada (3 picos)
-  ctx.lineTo( right - r * 0.66, bottom - 4 );
-  ctx.lineTo( cx, bottom );
-  ctx.lineTo( left + r * 0.66, bottom - 4 );
-  ctx.lineTo( left, bottom );
-  ctx.closePath();
-  ctx.fill();
-
-  // ojos mirando segun direccion
-  const dir = DIRS[ g.dir ] || { x: 0, y: 0 };
-  const ex = dir.x * 1.6;
-  const ey = dir.y * 1.6;
+// Ojos del fantasma mirando segun su direccion. Los reutiliza el modo
+// 'eyes' (cuerpo transparente) y el dibujo normal.
+function drawGhostEyes( ctx, dir, cx, cy ) {
+  const dirV = DIRS[ dir ] || { x: 0, y: 0 };
+  const ex = dirV.x * 1.6;
+  const ey = dirV.y * 1.6;
   for ( const off of [ -3.5, 3.5 ] ) {
     ctx.fillStyle = '#fff';
     ctx.beginPath();
@@ -134,6 +135,45 @@ function drawGhost( ctx, g, color ) {
   }
 }
 
+function drawGhost( ctx, g, color, frightTimer ) {
+  const { cx, cy } = cellCenter( g.x, g.y );
+  const r = TILE / 2 - 1;
+  const top = cy - r;
+  const bottom = cy + r;
+  const left = cx - r;
+  const right = cx + r;
+
+  // Modo 'eyes': solo los ojos, sin cuerpo ni fondo.
+  if ( g.mode === 'eyes' ) {
+    drawGhostEyes( ctx, g.dir, cx, cy );
+    return;
+  }
+
+  // Asustado: azul; en los ultimos 120 frames del timer parpadea
+  // azul/blanco cada 10 frames.
+  let body = color;
+  if ( g.frightened ) {
+    body = FRIGHT_COLOR;
+    if ( frightTimer > 0 && frightTimer <= 120 && Math.floor( frightTimer / 10 ) % 2 === 1 ) {
+      body = FRIGHT_FLASH_COLOR;
+    }
+  }
+
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc( cx, cy - 1, r, Math.PI, 0, false ); // cabeza
+  ctx.lineTo( right, bottom );
+  // falda ondulada (3 picos)
+  ctx.lineTo( right - r * 0.66, bottom - 4 );
+  ctx.lineTo( cx, bottom );
+  ctx.lineTo( left + r * 0.66, bottom - 4 );
+  ctx.lineTo( left, bottom );
+  ctx.closePath();
+  ctx.fill();
+
+  drawGhostEyes( ctx, g.dir, cx, cy );
+}
+
 function drawHUD( ctx, game, W ) {
   ctx.fillStyle = '#fff';
   ctx.font = '14px "Courier New", monospace';
@@ -142,6 +182,17 @@ function drawHUD( ctx, game, W ) {
   ctx.fillText( 'SCORE ' + game.score, 8, 4 );
   ctx.textAlign = 'right';
   ctx.fillText( 'VIDAS ' + game.lives, W * TILE - 8, 4 );
+}
+
+// Popup del puntaje del ultimo fantasma comido: numero blanco en su celda.
+function drawPopup( ctx, popup ) {
+  if ( !popup || popup.ttl <= 0 ) return;
+  const { cx, cy } = cellCenter( popup.x, popup.y );
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText( popup.text, cx, cy );
 }
 
 // Orden del array = orden de dibujo de GHOST_STARTS: Blinky, Pinky, Inky, Clyde.
@@ -158,8 +209,10 @@ function draw( ctx, game, frame ) {
   drawWalls( ctx, grid );
   drawDoor( ctx, grid );
   drawDots( ctx, grid );
+  drawPowerPellets( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g, i ) => drawGhost( ctx, g, GHOST_COLORS[ i ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g, i ) => drawGhost( ctx, g, GHOST_COLORS[ i ] || '#ff0000', game.frightTimer ) );
+  drawPopup( ctx, game.popup );
   drawHUD( ctx, game, W );
 }
 

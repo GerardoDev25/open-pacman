@@ -1,6 +1,6 @@
 # SPEC 01 — Cuatro fantasmas con personalidades clásicas
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** ninguno (primer spec del proyecto)
 > **Fecha:** 2026-11-12
 > **Objetivo:** Tener 4 fantasmas con la personalidad clásica del arcade (Blinky agresivo, Pinky emboscador, Inky flanqueador, Clyde tímido), salida escalonada de la pen por dots comidos y Blinky levemente más rápido.
