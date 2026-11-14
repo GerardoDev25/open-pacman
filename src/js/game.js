@@ -260,6 +260,10 @@ function resetPositions( game ) {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
+    g.mode = 'pen';
+    g.exitPath = null;
+    // Si su umbral de salida ya fue alcanzado, el chequeo de liberacion en
+    // update() los re-emite de inmediato en el proximo frame.
   } );
 }
 
