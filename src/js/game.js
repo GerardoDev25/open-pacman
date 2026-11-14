@@ -259,6 +259,9 @@ function moveGhost( game, g ) {
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
+    // Cambio de velocidad solo al re-alinear (Decisiones SPEC 02): hacerlo a
+    // mitad de tramo romperia la suma exacta de 1/N y el alineado a centros.
+    g.speed = g.frightened ? FRIGHT_SPEED : GHOST_SPEEDS[ g.kind ];
     decideGhost( game, g );
     if ( !canMove( grid, g.x, g.y, g.dir, g ) ) return;
   }
@@ -291,6 +294,15 @@ function collides( a, b ) {
 }
 
 function update( game ) {
+  // Timer de modo asustado: decrementa antes de mover y colisionar, de forma
+  // que en el frame en que expira la colision ya es de perdida de vida normal.
+  if ( game.frightTimer > 0 ) {
+    game.frightTimer--;
+    if ( game.frightTimer === 0 ) {
+      game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+    }
+  }
+
   movePacman( game );
 
   // Liberacion por dots comidos: un fantasma en 'pen' sale al alcanzar
