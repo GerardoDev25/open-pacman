@@ -190,16 +190,20 @@ function decideGhost( game, g ) {
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
 
-  const target = ghostTarget( game, g );
+  // Asustado: huye — elige la direccion que MAXIMIZA la distancia Manhattan
+  // a Pacman. Mismo orden de desempate y regla de media vuelta que la caza.
+  const target = g.frightened
+    ? { x: Math.round( game.pacman.x ), y: Math.round( game.pacman.y ) }
+    : ghostTarget( game, g );
   let best = choices[ 0 ];
-  let bestDist = Infinity;
+  let bestDist = -1;
   for ( const dir of choices ) {
     const d = DIRS[ dir ];
     const nx = g.x + d.x;
     const ny = g.y + d.y;
     const dist = Math.abs( nx - target.x ) + Math.abs( ny - target.y );
-    // '<' estricto mantiene la primera opcion en empate: orden up,left,down,right.
-    if ( dist < bestDist ) {
+    // '>' estricto mantiene la primera opcion en empate: orden up,left,down,right.
+    if ( dist > bestDist ) {
       bestDist = dist;
       best = dir;
     }
