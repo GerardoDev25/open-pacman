@@ -22,6 +22,10 @@ const GHOST_SPEEDS = {
 // Dots comidos que necesita cada fantasma para salir de la pen.
 const GHOST_RELEASE_AT = { ambusher: 0, flanker: 30, shy: 60, hunter: 90 };
 
+const FRIGHT_FRAMES = 360;    // 6 s a 60 fps
+const FRIGHT_SPEED = 1 / 14;  // fantasmas asustados (restriccion 1/N)
+const GHOST_POINTS = [ 200, 400, 800, 1600 ]; // cadena por fantasma comido
+
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
 function createGame() {
@@ -38,6 +42,9 @@ function createGame() {
     lives: 3,
     dotsRemaining: dots,
     dotsEaten: 0,
+    frightTimer: 0,  // frames restantes de modo asustado; 0 = inactivo
+    ghostChain: 0,   // indice en GHOST_POINTS del proximo fantasma comido
+    popup: null,     // { x, y, text, ttl } del ultimo fantasma comido
     grid,
     pacman: {
       x: PACMAN_START.x,
@@ -53,6 +60,7 @@ function createGame() {
       speed: GHOST_SPEEDS[ g.kind ],
       kind: g.kind,
       mode: 'pen', // 'pen' (esperando) | 'exit' (hacia la puerta) | 'chase'
+      frightened: false, // true durante el timer (excepto modo 'eyes')
       releaseAt: GHOST_RELEASE_AT[ g.kind ],
     } ) ),
   };
@@ -113,6 +121,17 @@ function movePacman( game ) {
       game.score += 10;
       game.dotsRemaining--;
       game.dotsEaten++;
+    } else if ( grid[ p.y ][ p.x ] === 4 ) {
+      // Power pellet: +50 puntos y activa el modo asustado. Si ya estaba
+      // activo, el timer y la cadena se reinician.
+      grid[ p.y ][ p.x ] = 0;
+      game.score += 50;
+      game.dotsRemaining--;
+      game.frightTimer = FRIGHT_FRAMES;
+      game.ghostChain = 0;
+      for ( const g of game.ghosts ) {
+        if ( g.mode !== 'eyes' ) g.frightened = true;
+      }
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
