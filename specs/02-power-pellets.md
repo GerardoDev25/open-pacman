@@ -1,6 +1,6 @@
 # SPEC 02 — Power pellets y modo asustado
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 01 (cuatro fantasmas con modos pen/exit/chase)
 > **Fecha:** 2026-11-14
 > **Objetivo:** Añadir 4 power pellets que activan 6 segundos de modo asustado: los fantasmas se vuelven azules, huyen más lento, y Pacman puede comerlos (cadena 200/400/800/1600), enviando sus ojos de regreso a la pen para revivir.
