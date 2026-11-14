@@ -11,7 +11,14 @@ const DIRS = {
 const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
-const GHOST_SPEED = 0.1;    // 1/10 celda/frame
+// Velocidades por kind, siempre 1/N con N entero para re-alinear a centros
+// de celda (ver Decisiones de SPEC 01). Blinky levemente mas rapido.
+const GHOST_SPEEDS = {
+  hunter: 1 / 9,    // Blinky
+  ambusher: 1 / 10, // Pinky
+  flanker: 1 / 10,  // Inky
+  shy: 1 / 10,      // Clyde
+};
 
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
@@ -40,7 +47,7 @@ function createGame() {
       x: g.x,
       y: g.y,
       dir: 'up',
-      speed: GHOST_SPEED,
+      speed: GHOST_SPEEDS[ g.kind ],
       kind: g.kind,
     } ) ),
   };
