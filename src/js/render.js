@@ -114,7 +114,28 @@ function drawPacman( ctx, p, frame ) {
   ctx.fill();
 }
 
-function drawGhost( ctx, g, color ) {
+const FRIGHT_COLOR = '#2121de';
+const FRIGHT_FLASH_COLOR = '#ffffff';
+
+// Ojos del fantasma mirando segun su direccion. Los reutiliza el modo
+// 'eyes' (cuerpo transparente) y el dibujo normal.
+function drawGhostEyes( ctx, dir, cx, cy ) {
+  const dirV = DIRS[ dir ] || { x: 0, y: 0 };
+  const ex = dirV.x * 1.6;
+  const ey = dirV.y * 1.6;
+  for ( const off of [ -3.5, 3.5 ] ) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc( cx + off, cy - 1, 3, 0, Math.PI * 2 );
+    ctx.fill();
+    ctx.fillStyle = '#0000bb';
+    ctx.beginPath();
+    ctx.arc( cx + off + ex, cy - 1 + ey, 1.5, 0, Math.PI * 2 );
+    ctx.fill();
+  }
+}
+
+function drawGhost( ctx, g, color, frightTimer ) {
   const { cx, cy } = cellCenter( g.x, g.y );
   const r = TILE / 2 - 1;
   const top = cy - r;
@@ -122,7 +143,23 @@ function drawGhost( ctx, g, color ) {
   const left = cx - r;
   const right = cx + r;
 
-  ctx.fillStyle = color;
+  // Modo 'eyes': solo los ojos, sin cuerpo ni fondo.
+  if ( g.mode === 'eyes' ) {
+    drawGhostEyes( ctx, g.dir, cx, cy );
+    return;
+  }
+
+  // Asustado: azul; en los ultimos 120 frames del timer parpadea
+  // azul/blanco cada 10 frames.
+  let body = color;
+  if ( g.frightened ) {
+    body = FRIGHT_COLOR;
+    if ( frightTimer > 0 && frightTimer <= 120 && Math.floor( frightTimer / 10 ) % 2 === 1 ) {
+      body = FRIGHT_FLASH_COLOR;
+    }
+  }
+
+  ctx.fillStyle = body;
   ctx.beginPath();
   ctx.arc( cx, cy - 1, r, Math.PI, 0, false ); // cabeza
   ctx.lineTo( right, bottom );
@@ -134,20 +171,7 @@ function drawGhost( ctx, g, color ) {
   ctx.closePath();
   ctx.fill();
 
-  // ojos mirando segun direccion
-  const dir = DIRS[ g.dir ] || { x: 0, y: 0 };
-  const ex = dir.x * 1.6;
-  const ey = dir.y * 1.6;
-  for ( const off of [ -3.5, 3.5 ] ) {
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc( cx + off, cy - 1, 3, 0, Math.PI * 2 );
-    ctx.fill();
-    ctx.fillStyle = '#0000bb';
-    ctx.beginPath();
-    ctx.arc( cx + off + ex, cy - 1 + ey, 1.5, 0, Math.PI * 2 );
-    ctx.fill();
-  }
+  drawGhostEyes( ctx, g.dir, cx, cy );
 }
 
 function drawHUD( ctx, game, W ) {
@@ -187,7 +211,7 @@ function draw( ctx, game, frame ) {
   drawDots( ctx, grid );
   drawPowerPellets( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g, i ) => drawGhost( ctx, g, GHOST_COLORS[ i ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g, i ) => drawGhost( ctx, g, GHOST_COLORS[ i ] || '#ff0000', game.frightTimer ) );
   drawPopup( ctx, game.popup );
   drawHUD( ctx, game, W );
 }
